@@ -1,0 +1,61 @@
+name: Static validation
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: static-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Run repository tests
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Compile Python sources
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import py_compile
+
+          excluded = {".git", "artifacts", "build", "qemu-src", ".venv"}
+          paths = [
+              path
+              for path in Path(".").rglob("*.py")
+              if not excluded.intersection(path.parts)
+          ]
+          for path in paths:
+              py_compile.compile(str(path), doraise=True)
+          print(f"compiled {len(paths)} Python source files")
+          PY
+
+      - name: Parse shell sources
+        shell: bash
+        run: |
+          if [[ -f ./lab ]]; then
+            bash -n ./lab
+          fi
+          while IFS= read -r -d '' script; do
+            bash -n "$script"
+          done < <(find scripts -type f -name '*.sh' -print0 2>/dev/null || true)
+
+      # Deliberately static-only. The exploit lab is not executed on a shared
+      # GitHub-hosted runner and the workflow does not build the QEMU image.

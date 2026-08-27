@@ -1,0 +1,31 @@
+name: qemu-cxl-mailbox-rce-lab
+
+services:
+  reproduce:
+    image: qemu-cxl-mailbox-rce-lab:562bae59
+    platform: linux/amd64
+    build:
+      context: .
+      args:
+        QEMU_COMMIT: 562bae590f194fb590beb5c65da44fc35ab9f64a
+    init: true
+    user: "${LAB_UID:-1000}:${LAB_GID:-1000}"
+    read_only: true
+    network_mode: none
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 1536m
+    cpus: 2.0
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=128m,mode=1777
+    environment:
+      LAB_CONTAINER: "1"
+      LAB_RUN_LABEL: "${LAB_RUN_LABEL:-run-manual}"
+    volumes:
+      - type: bind
+        source: ./artifacts
+        target: /lab/artifacts
+        read_only: false

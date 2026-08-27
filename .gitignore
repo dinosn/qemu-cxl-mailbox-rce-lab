@@ -1,0 +1,54 @@
+# Editor and operating-system files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+
+# Python caches and local environments
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+
+# Build trees and fetched source
+build/
+build-*/
+qemu-src/
+compile_commands.json
+
+# Dynamic lab output (source-only repository)
+artifacts/*
+!artifacts/.gitkeep
+runs/
+*.log
+*.pid
+*.sock
+*.core
+core
+core.*
+PWN
+
+# Binaries, VM images, and evidence archives
+*.o
+*.a
+*.so
+*.so.*
+*.out
+*.bin
+*.img
+*.raw
+*.qcow
+*.qcow2
+*.iso
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+*.7z

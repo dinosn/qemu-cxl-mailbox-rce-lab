@@ -1,0 +1,10 @@
+* text=auto eol=lf
+
+*.md text diff=markdown
+*.py text diff=python
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+Dockerfile text eol=lf
+lab text eol=lf

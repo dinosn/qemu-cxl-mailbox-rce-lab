@@ -1,0 +1,142 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+lab_root="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+compose=(docker compose --project-directory "$lab_root" -f "$lab_root/compose.yaml")
+
+usage() {
+    cat <<'EOF'
+Usage: ./lab COMMAND [LABEL]
+
+Commands:
+  build          Build the pinned optimized QEMU image.
+  test [LABEL]   Run the Docker-bounded reproduction and preserve evidence.
+  verify         Run source, syntax, policy, and unit checks only.
+  status         Show container state and the newest evidence result.
+  clean          Remove lab containers and networks; preserve evidence/images.
+EOF
+}
+
+need_docker() {
+    if ! command -v docker >/dev/null 2>&1; then
+        echo "docker is required" >&2
+        exit 2
+    fi
+    if ! docker compose version >/dev/null 2>&1; then
+        echo "Docker Compose v2 is required" >&2
+        exit 2
+    fi
+}
+
+prepare_artifacts() {
+    mkdir -p "$lab_root/artifacts"
+    if [[ ! -w "$lab_root/artifacts" ]]; then
+        echo "artifact directory is not writable: $lab_root/artifacts" >&2
+        exit 2
+    fi
+}
+
+new_label() {
+    local supplied="${1:-}"
+    if [[ -n "$supplied" ]]; then
+        printf '%s\n' "$supplied"
+    else
+        printf 'run-%s-%s\n' "$(date -u +%Y%m%dT%H%M%SZ)" "$$"
+    fi
+}
+
+run_verify() {
+    "$lab_root/scripts/verify.sh"
+}
+
+run_build() {
+    need_docker
+    run_verify
+    prepare_artifacts
+    "${compose[@]}" build
+}
+
+run_test() {
+    local label
+    need_docker
+    run_verify
+    prepare_artifacts
+    label="$(new_label "${1:-}")"
+    if [[ ! "$label" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$ ]]; then
+        echo "invalid label; use 1-80 letters, digits, dots, underscores, or dashes" >&2
+        exit 2
+    fi
+    if [[ -e "$lab_root/artifacts/$label" || -e "$lab_root/artifacts/$label.tgz" ]]; then
+        echo "refusing to overwrite existing evidence: artifacts/$label" >&2
+        exit 2
+    fi
+
+    LAB_UID="$(id -u)"
+    LAB_GID="$(id -g)"
+    export LAB_UID LAB_GID
+    export LAB_RUN_LABEL="$label"
+
+    "${compose[@]}" build
+    set +e
+    "${compose[@]}" run --rm --no-deps reproduce
+    local rc=$?
+    set -e
+    echo "Evidence directory: $lab_root/artifacts/$label"
+    echo "Evidence bundle:    $lab_root/artifacts/$label.tgz"
+    return "$rc"
+}
+
+run_status() {
+    local newest_result=""
+    if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+        "${compose[@]}" ps --all
+    else
+        echo "Docker Compose is unavailable; showing evidence only."
+    fi
+    if [[ -d "$lab_root/artifacts" ]]; then
+        while IFS= read -r candidate_result; do
+            if [[ -z "$newest_result" || "$candidate_result" -nt "$newest_result" ]]; then
+                newest_result="$candidate_result"
+            fi
+        done < <(find "$lab_root/artifacts" -mindepth 2 -maxdepth 2 \
+            -type f -name run-result.json -print)
+    fi
+    if [[ -n "$newest_result" ]]; then
+        echo "Newest result: $newest_result"
+        sed -n '1,240p' "$newest_result"
+    else
+        echo "No evidence runs found."
+    fi
+}
+
+run_clean() {
+    need_docker
+    "${compose[@]}" down --remove-orphans
+    echo "Lab containers removed. Evidence and the built image were preserved."
+}
+
+case "${1:-}" in
+    build)
+        run_build
+        ;;
+    test)
+        run_test "${2:-}"
+        ;;
+    verify)
+        run_verify
+        ;;
+    status)
+        run_status
+        ;;
+    clean)
+        run_clean
+        ;;
+    help|-h|--help|'')
+        usage
+        ;;
+    *)
+        echo "unknown command: $1" >&2
+        usage >&2
+        exit 2
+        ;;
+esac
