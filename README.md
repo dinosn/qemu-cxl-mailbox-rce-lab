@@ -1,8 +1,5 @@
 # QEMU CXL mailbox process-execution lab
 
-> **Private security-research repository. Do not make this repository public,
-> mirror it, or run it against systems you do not own or have explicit
-> permission to test.**
 
 This lab deterministically reproduces a composed CXL Type-3 mailbox issue in
 QEMU at commit `562bae590f194fb590beb5c65da44fc35ab9f64a`
